@@ -1,0 +1,1820 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sky Focus | 실시간 항로 비행 집중 타이머</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Pretendard:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #070d18;
+      --card-bg: rgba(13, 22, 38, 0.92);
+      --card-border: rgba(56, 189, 248, 0.18);
+      --accent-cyan: #38bdf8;
+      --accent-sky: #0284c7;
+      --accent-gold: #f59e0b;
+      --accent-green: #10b981;
+      --text-main: #f8fafc;
+      --text-sub: #94a3b8;
+      --radar-grid: rgba(56, 189, 248, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 1.25rem 1rem 3rem;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: -150px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 800px;
+      height: 500px;
+      background: radial-gradient(ellipse, rgba(56, 189, 248, 0.12) 0%, rgba(7, 13, 24, 0) 70%);
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 720px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.1rem;
+      z-index: 1;
+    }
+
+    /* 헤더 */
+    header {
+      text-align: center;
+      position: relative;
+      width: 100%;
+    }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.75rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--accent-cyan);
+      font-weight: 700;
+      margin-bottom: 0.2rem;
+    }
+    .brand svg {
+      width: 14px;
+      height: 14px;
+      fill: currentColor;
+    }
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #ffffff 40%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .sub-desc {
+      font-size: 0.82rem;
+      color: var(--text-sub);
+      margin-top: 0.25rem;
+    }
+
+    /* 현재 기체 위치(출발 공항) 배너 */
+    .current-location-bar {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(15, 23, 42, 0.75);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 0.65rem 1rem;
+      font-size: 0.85rem;
+    }
+    .loc-label {
+      color: var(--text-sub);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .loc-val {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--accent-cyan);
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .loc-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      box-shadow: 0 0 8px var(--accent-green);
+      animation: pulseDot 2s infinite;
+    }
+    @keyframes pulseDot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    /* 레이더 맵 뷰포트 카드 */
+    .viewport-card {
+      width: 100%;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 1rem;
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(16px);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .map-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.75rem;
+      color: var(--text-sub);
+      font-family: 'JetBrains Mono', monospace;
+      padding: 0 4px 0.6rem 4px;
+    }
+    .flight-code-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(56, 189, 248, 0.12);
+      color: var(--accent-cyan);
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      font-weight: 700;
+    }
+    .zoom-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: #94a3b8;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s;
+    }
+    .zoom-indicator:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+    .zoom-indicator.active {
+      color: var(--accent-gold);
+      border: 1px solid rgba(245, 158, 11, 0.5);
+      background: rgba(245, 158, 11, 0.1);
+    }
+
+    .map-canvas-container {
+      width: 100%;
+      height: 320px;
+      background: radial-gradient(circle at 50% 50%, #0d1e38 0%, #040914 100%);
+      border-radius: 14px;
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      position: relative;
+      overflow: hidden;
+      box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.9);
+    }
+
+    /* 그리드 */
+    .map-canvas-container::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: 
+        linear-gradient(var(--radar-grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--radar-grid) 1px, transparent 1px);
+      background-size: 30px 30px;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* 레이더 스위프 빔 효과 */
+    .radar-sweep {
+      position: absolute;
+      width: 240%;
+      height: 240%;
+      top: -70%;
+      left: -70%;
+      background: conic-gradient(from 0deg at 50% 50%, rgba(56, 189, 248, 0.1) 0deg, rgba(56, 189, 248, 0) 60deg, transparent 360deg);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 1;
+      opacity: 0.6;
+      animation: radarRotate 14s linear infinite;
+    }
+    @keyframes radarRotate {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .map-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      position: relative;
+      z-index: 2;
+      transition: viewBox 1.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    /* 실제 세계 지도 대륙 스타일 */
+    .ocean-layer {
+      fill: none;
+    }
+    .world-land {
+      fill: #1c2b48;
+      stroke: #334d7d;
+      stroke-width: 0.75;
+      transition: fill 0.25s;
+    }
+    .world-land:hover {
+      fill: #22375c;
+    }
+    .latlon-line {
+      stroke: rgba(56, 189, 248, 0.1);
+      stroke-width: 0.5;
+      fill: none;
+    }
+    .equator-line {
+      stroke: rgba(56, 189, 248, 0.22);
+      stroke-width: 0.8;
+      stroke-dasharray: 4 3;
+      fill: none;
+    }
+
+    /* 항로 점선 스타일 */
+    .flight-path-bg {
+      stroke: rgba(56, 189, 248, 0.25);
+      stroke-width: 2;
+      stroke-dasharray: 6 5;
+      stroke-linecap: round;
+      fill: none;
+    }
+    .flight-path-active {
+      stroke: #38bdf8;
+      stroke-width: 2.5;
+      stroke-dasharray: 6 5;
+      stroke-linecap: round;
+      fill: none;
+      filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.9));
+      animation: dashMove 2s linear infinite;
+    }
+    @keyframes dashMove {
+      from { stroke-dashoffset: 0; }
+      to { stroke-dashoffset: -22; }
+    }
+
+    /* 공항 마커 */
+    .airport-marker {
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .airport-marker circle.dot {
+      fill: #38bdf8;
+      filter: drop-shadow(0 0 4px #38bdf8);
+    }
+    .airport-marker circle.pulse {
+      fill: none;
+      stroke: #38bdf8;
+      stroke-width: 1.5;
+      opacity: 0.8;
+      animation: markerPulse 2s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+    }
+    .airport-marker.current circle.dot {
+      fill: var(--accent-green);
+      filter: drop-shadow(0 0 6px var(--accent-green));
+    }
+    .airport-marker.current circle.pulse {
+      stroke: var(--accent-green);
+    }
+    .airport-marker.dest circle.dot {
+      fill: var(--accent-gold);
+      filter: drop-shadow(0 0 6px var(--accent-gold));
+    }
+    .airport-marker.dest circle.pulse {
+      stroke: var(--accent-gold);
+    }
+    @keyframes markerPulse {
+      0% { r: 3; opacity: 1; }
+      100% { r: 12; opacity: 0; }
+    }
+    .airport-label {
+      font-size: 7.5px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      fill: #cbd5e1;
+      pointer-events: none;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+    }
+    .airport-marker.current .airport-label {
+      fill: #4ade80;
+    }
+    .airport-marker.dest .airport-label {
+      fill: #fbbf24;
+    }
+
+    /* 비행기 아이콘 */
+    .plane-g {
+      transition: transform 0.3s ease-out;
+      filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.95));
+    }
+
+    /* 오버레이 스탯 바 */
+    .telemetry-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+    }
+    .tele-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .tele-label {
+      color: var(--text-sub);
+      font-size: 0.65rem;
+    }
+    .tele-val {
+      color: var(--accent-cyan);
+      font-weight: 700;
+    }
+
+    /* 엔진 사운드 컨트롤 */
+    .audio-control-bar {
+      width: 100%;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0 4px;
+    }
+    .btn-sound {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid var(--card-border);
+      color: var(--text-sub);
+      padding: 0.45rem 0.9rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .btn-sound:hover {
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--text-main);
+    }
+    .btn-sound.active {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: var(--accent-cyan);
+      color: var(--accent-cyan);
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.25);
+    }
+    .btn-sound.active svg {
+      animation: soundWave 1.4s ease-in-out infinite alternate;
+    }
+    @keyframes soundWave {
+      0% { transform: scale(0.95); }
+      100% { transform: scale(1.15); }
+    }
+
+    /* 목적지 선택 캐러셀 패널 */
+    .dest-selector-card {
+      width: 100%;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 1rem 1.1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .dest-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .dest-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .dest-badge {
+      font-size: 0.7rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--accent-cyan);
+      background: rgba(56, 189, 248, 0.1);
+      padding: 2px 7px;
+      border-radius: 4px;
+      border: 1px solid rgba(56, 189, 248, 0.2);
+    }
+    .dest-list {
+      display: flex;
+      gap: 0.5rem;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(56, 189, 248, 0.3) transparent;
+    }
+    .dest-list::-webkit-scrollbar {
+      height: 4px;
+    }
+    .dest-list::-webkit-scrollbar-thumb {
+      background: rgba(56, 189, 248, 0.3);
+      border-radius: 4px;
+    }
+    .dest-card {
+      flex: 0 0 auto;
+      width: 130px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 0.65rem 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .dest-card:hover {
+      background: rgba(56, 189, 248, 0.1);
+      border-color: rgba(56, 189, 248, 0.4);
+      transform: translateY(-2px);
+    }
+    .dest-card.selected {
+      background: rgba(56, 189, 248, 0.18);
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.25);
+    }
+    .dest-card-code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--accent-cyan);
+    }
+    .dest-card-city {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-main);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .dest-card-sub {
+      font-size: 0.65rem;
+      color: var(--text-sub);
+    }
+
+    /* 보딩패스 타이머 카드 */
+    .boarding-card {
+      width: 100%;
+      background: #f8fafc;
+      color: #0f172a;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.6);
+      position: relative;
+    }
+    .boarding-top {
+      background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+      color: #ffffff;
+      padding: 0.85rem 1.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .pass-title {
+      font-weight: 800;
+      font-size: 0.95rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .class-badge {
+      font-size: 0.7rem;
+      background: rgba(255, 255, 255, 0.2);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .boarding-body {
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .flight-route-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 0.85rem;
+      border-bottom: 1px dashed #cbd5e1;
+    }
+    .city-block {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .city-block.right {
+      text-align: right;
+    }
+    .city-code {
+      font-size: 1.8rem;
+      font-weight: 800;
+      font-family: 'JetBrains Mono', monospace;
+      color: #0f172a;
+      line-height: 1;
+    }
+    .city-name {
+      font-size: 0.75rem;
+      color: #64748b;
+      font-weight: 600;
+    }
+    .flight-plane-divider {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      flex: 1;
+      padding: 0 1rem;
+    }
+    .route-dist-label {
+      font-size: 0.68rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: #0284c7;
+      font-weight: 700;
+    }
+    .route-line {
+      width: 100%;
+      height: 2px;
+      background: #cbd5e1;
+      position: relative;
+    }
+    .route-line::after {
+      content: '';
+      position: absolute;
+      top: -3px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 8px;
+      height: 8px;
+      background: #0284c7;
+      border-radius: 50%;
+    }
+
+    /* 입력 필드 */
+    .input-row {
+      display: flex;
+      gap: 0.75rem;
+    }
+    .input-group {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .input-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .input-field {
+      border: 1px solid #e2e8f0;
+      background: #f1f5f9;
+      border-radius: 8px;
+      padding: 0.55rem 0.75rem;
+      font-size: 0.85rem;
+      font-family: inherit;
+      color: #0f172a;
+      font-weight: 600;
+      outline: none;
+      transition: all 0.2s;
+    }
+    .input-field:focus {
+      border-color: #0284c7;
+      background: #ffffff;
+      box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+    }
+
+    /* 시간 프리셋 선택기 */
+    .time-selector {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .time-btn-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.5rem;
+    }
+    .time-btn {
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 0.5rem 0.25rem;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #334155;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    .time-btn .tier-tag {
+      font-size: 0.6rem;
+      font-weight: 500;
+      color: #64748b;
+    }
+    .time-btn:hover {
+      background: #e2e8f0;
+      border-color: #cbd5e1;
+    }
+    .time-btn.active {
+      background: #0284c7;
+      border-color: #0284c7;
+      color: #ffffff;
+    }
+    .time-btn.active .tier-tag {
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    /* 대형 디지털 타이머 디스플레이 */
+    .timer-display-box {
+      background: #0f172a;
+      color: #f8fafc;
+      border-radius: 12px;
+      padding: 1.1rem;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .timer-display-box::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.15) 0%, transparent 80%);
+      pointer-events: none;
+    }
+    .timer-clock {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 3.2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      color: #38bdf8;
+      text-shadow: 0 0 20px rgba(56, 189, 248, 0.5);
+    }
+    .timer-status-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 0.6rem;
+      font-size: 0.75rem;
+      color: #94a3b8;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* 프로그레스 바 */
+    .flight-progress-container {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .progress-bar-track {
+      width: 100%;
+      height: 8px;
+      background: #e2e8f0;
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #0284c7, #38bdf8);
+      border-radius: 999px;
+      width: 0%;
+      transition: width 0.4s ease;
+    }
+    .progress-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.7rem;
+      color: #64748b;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* 조작 버튼 */
+    .actions-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 0.75rem;
+    }
+    .btn-action {
+      border: none;
+      border-radius: 10px;
+      padding: 0.85rem;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+    .btn-start {
+      background: #0284c7;
+      color: #ffffff;
+      box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);
+    }
+    .btn-start:hover {
+      background: #0369a1;
+      transform: translateY(-1px);
+    }
+    .btn-pause {
+      background: #f59e0b;
+      color: #ffffff;
+      box-shadow: 0 4px 14px rgba(245, 158, 11, 0.35);
+    }
+    .btn-pause:hover {
+      background: #d97706;
+    }
+    .btn-reset {
+      background: #f1f5f9;
+      color: #475569;
+      border: 1px solid #cbd5e1;
+    }
+    .btn-reset:hover {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+
+    /* 도착 모달 */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.25rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    .modal-overlay.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal-card {
+      background: #0f172a;
+      border: 1px solid var(--accent-cyan);
+      border-radius: 20px;
+      width: 100%;
+      max-width: 440px;
+      padding: 2rem 1.5rem;
+      text-align: center;
+      box-shadow: 0 25px 50px -12px rgba(56, 189, 248, 0.3);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.1rem;
+      animation: modalPop 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes modalPop {
+      0% { transform: scale(0.9) translateY(20px); opacity: 0; }
+      100% { transform: scale(1) translateY(0); opacity: 1; }
+    }
+    .modal-icon {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background: rgba(16, 185, 129, 0.15);
+      border: 2px solid var(--accent-green);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent-green);
+    }
+    .modal-title {
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: #ffffff;
+    }
+    .modal-desc {
+      font-size: 0.9rem;
+      color: var(--text-sub);
+      line-height: 1.5;
+    }
+    .modal-highlight {
+      color: var(--accent-cyan);
+      font-weight: 700;
+    }
+    .relay-notice {
+      background: rgba(56, 189, 248, 0.08);
+      border: 1px dashed rgba(56, 189, 248, 0.3);
+      border-radius: 10px;
+      padding: 0.75rem;
+      font-size: 0.8rem;
+      color: #cbd5e1;
+      width: 100%;
+    }
+    .btn-modal-close {
+      width: 100%;
+      background: var(--accent-cyan);
+      color: #070d18;
+      border: none;
+      padding: 0.85rem;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-modal-close:hover {
+      background: #7dd3fc;
+    }
+
+    @media (max-width: 480px) {
+      .timer-clock { font-size: 2.7rem; }
+      .city-code { font-size: 1.5rem; }
+      .telemetry-bar { grid-template-columns: repeat(2, 1fr); gap: 0.6rem; }
+      .actions-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- 헤더 -->
+    <header>
+      <div class="brand">
+        <svg viewBox="0 0 24 24"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
+        <span>Sky Focus • Global Radar</span>
+      </div>
+      <h1>실시간 세계 비행 집중 타이머</h1>
+      <p class="sub-desc">공부 시간에 맞춰 대륙을 횡단하며 지구를 여행하세요</p>
+    </header>
+
+    <!-- 현재 위치(출발 공항) 정보 바 -->
+    <div class="current-location-bar">
+      <div class="loc-label">
+        <span class="loc-dot"></span>
+        <span>현재 기체 정박지 (출발 공항)</span>
+      </div>
+      <div class="loc-val" id="currentAirportDisplay">
+        ICN • Seoul, South Korea
+      </div>
+    </div>
+
+    <!-- 레이더 맵 뷰포트 카드 -->
+    <div class="viewport-card">
+      <div class="map-header">
+        <div class="flight-code-badge">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
+          <span id="flightCallsign">SF-772</span>
+        </div>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <button class="zoom-indicator" id="btnToggleZoom" onclick="toggleMapZoom()" title="지도 시점 전환">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+            <span id="zoomLabelText">기체 시점 확대</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="map-canvas-container" id="mapCanvasContainer">
+        <div class="radar-sweep"></div>
+        <svg class="map-svg" id="worldMapSvg" viewBox="0 0 1000 500" preserveAspectRatio="xMidYMid meet">
+          <!-- 위경도 가이드선 -->
+          <g class="graticule">
+            <line class="equator-line" x1="0" y1="250" x2="1000" y2="250" />
+            <line class="latlon-line" x1="0" y1="125" x2="1000" y2="125" />
+            <line class="latlon-line" x1="0" y1="375" x2="1000" y2="375" />
+            <line class="latlon-line" x1="250" y1="0" x2="250" y2="500" />
+            <line class="latlon-line" x1="500" y1="0" x2="500" y2="500" />
+            <line class="latlon-line" x1="750" y1="0" x2="750" y2="500" />
+          </g>
+
+          <!-- 실제 세계 지도 대륙 및 주요 섬 벡터 패스 (Equirectangular Projection) -->
+          <g id="worldContinents">
+            <!-- 유라시아 & 아프리카 (Eurasia, Europe, Africa) -->
+            <!-- 유럽 및 유라시아 본토 -->
+            <path class="world-land" d="M485,115 L490,105 L500,95 L515,90 L530,95 L545,85 L565,85 L585,80 L610,85 L640,80 L675,85 L710,75 L740,70 L770,75 L800,75 L825,85 L845,95 L840,110 L825,120 L805,125 L795,140 L785,150 L775,165 L765,170 L755,185 L745,190 L730,195 L720,210 L705,225 L685,245 L670,250 L650,240 L640,225 L630,220 L620,205 L605,195 L590,200 L575,200 L560,190 L545,180 L535,175 L525,170 L510,180 L495,190 L480,180 L470,170 L460,165 L465,150 L475,140 L485,130 Z" />
+            <!-- 스칸디나비아 반도 -->
+            <path class="world-land" d="M515,75 L530,70 L540,65 L555,75 L550,90 L535,115 L525,125 L515,115 L510,95 Z" />
+            <!-- 영국 및 아일랜드 -->
+            <path class="world-land" d="M470,110 L478,105 L482,118 L475,130 L468,122 Z" />
+            <path class="world-land" d="M460,118 L465,115 L465,125 L458,126 Z" />
+            <!-- 이베리아 반도 (스페인/포르투갈) -->
+            <path class="world-land" d="M465,165 L480,165 L480,185 L465,185 L458,175 Z" />
+            <!-- 이탈리아 반도 & 그리스 -->
+            <path class="world-land" d="M510,160 L518,170 L525,185 L518,188 L512,175 Z" />
+            <!-- 인도 아대륙 -->
+            <path class="world-land" d="M670,215 L705,225 L700,265 L685,290 L675,260 L665,235 Z" />
+            <!-- 동남아시아 (인도차이나 반도) -->
+            <path class="world-land" d="M725,220 L745,230 L750,255 L740,275 L735,260 L725,245 Z" />
+            <path class="world-land" d="M740,275 L745,295 L738,300 L735,285 Z" />
+            <!-- 한반도 -->
+            <path class="world-land" d="M790,172 L800,172 L798,188 L792,187 Z" />
+            <!-- 일본 열도 (혼슈, 홋카이도, 규슈) -->
+            <path class="world-land" d="M812,150 L825,152 L820,165 L810,160 Z" />
+            <path class="world-land" d="M805,168 L822,170 L828,185 L815,190 L802,180 Z" />
+            <!-- 필리핀 제도 -->
+            <path class="world-land" d="M775,240 L785,245 L782,270 L772,265 Z" />
+            <!-- 인도네시아 말레이 열도 (수마트라, 자바, 보르네오) -->
+            <path class="world-land" d="M720,295 L745,320 L735,325 L712,305 Z" />
+            <path class="world-land" d="M750,300 L775,295 L770,320 L750,315 Z" />
+            <path class="world-land" d="M740,325 L780,330 L770,338 L735,332 Z" />
+            <!-- 아프리카 대륙 본토 -->
+            <path class="world-land" d="M475,190 L510,185 L540,195 L555,205 L570,240 L595,250 L575,280 L560,330 L545,370 L525,385 L505,370 L480,330 L455,280 L445,240 L460,215 Z" />
+            <!-- 마다가스카르 -->
+            <path class="world-land" d="M580,330 L592,335 L585,375 L575,370 Z" />
+
+            <!-- 아메리카 대륙 (North & South America) -->
+            <!-- 그린란드 -->
+            <path class="world-land" d="M360,50 L415,55 L405,100 L370,110 L345,95 L340,70 Z" />
+            <!-- 북아메리카 본토 (알래스카, 캐나다, 미국) -->
+            <path class="world-land" d="M120,95 L145,85 L180,85 L210,75 L250,75 L285,85 L290,110 L260,115 L245,130 L275,135 L295,160 L285,190 L260,205 L235,200 L210,215 L180,210 L155,190 L160,150 L140,140 L115,115 Z" />
+            <!-- 멕시코 및 중앙아메리카 -->
+            <path class="world-land" d="M180,210 L215,215 L230,245 L255,260 L245,270 L215,255 L190,230 Z" />
+            <!-- 카리브해 제도 (쿠바 등) -->
+            <path class="world-land" d="M250,225 L280,230 L275,238 L245,232 Z" />
+            <!-- 남아메리카 대륙 -->
+            <path class="world-land" d="M250,270 L280,265 L320,285 L355,310 L335,360 L310,405 L290,460 L275,455 L265,395 L245,340 L235,300 Z" />
+
+            <!-- 오세아니아 / 호주 & 뉴질랜드 -->
+            <path class="world-land" d="M785,335 L825,325 L840,345 L805,355 Z" /> <!-- 파푸아뉴기니 -->
+            <!-- 호주 본토 -->
+            <path class="world-land" d="M785,365 L820,360 L850,380 L860,420 L840,440 L795,435 L775,405 L770,380 Z" />
+            <!-- 뉴질랜드 -->
+            <path class="world-land" d="M885,425 L895,420 L885,450 Z" />
+            <path class="world-land" d="M875,450 L885,445 L875,475 Z" />
+          </g>
+
+          <!-- 항로 점선 레이어 -->
+          <g id="routeLayer">
+            <!-- 전체 예정 항로 (연한 점선 가이드) -->
+            <path id="flightPathBg" class="flight-path-bg" d="" />
+            <!-- 현재까지 비행한 실시간 항로 (발광 네온 점선 애니메이션) -->
+            <path id="flightPathActive" class="flight-path-active" d="" />
+          </g>
+
+          <!-- 공항 노드 레이어 -->
+          <g id="airportsLayer"></g>
+
+          <!-- 실시간 이동 비행기 기체 -->
+          <g id="planeGroup" class="plane-g" transform="translate(0,0) rotate(0)">
+            <!-- 레이더 포커스 펄스 링 -->
+            <circle cx="0" cy="0" r="14" fill="rgba(56, 189, 248, 0.2)" stroke="rgba(56, 189, 248, 0.7)" stroke-width="1.2">
+              <animate attributeName="r" values="8;18;8" dur="2.5s" repeatCount="indefinite"/>
+              <animate attributeName="opacity" values="0.8;0.2;0.8" dur="2.5s" repeatCount="indefinite"/>
+            </circle>
+            <!-- 비행기 정밀 실루엣 -->
+            <path d="M0,-11 L3,-2 L11,3 L11,6 L3,4 L2,10 L5,12 L5,14 L0,13 L-5,14 L-5,12 L-2,10 L-3,4 L-11,6 L-11,3 L-3,-2 Z" fill="#38bdf8" stroke="#ffffff" stroke-width="0.8" />
+          </g>
+        </svg>
+      </div>
+
+      <!-- 기체 텔레메트리 스탯 -->
+      <div class="telemetry-bar">
+        <div class="tele-item">
+          <span class="tele-label">FLIGHT STATUS</span>
+          <span class="tele-val" id="statusText">대기 중</span>
+        </div>
+        <div class="tele-item">
+          <span class="tele-label">ALTITUDE</span>
+          <span class="tele-val" id="flightAltitude">FL 000</span>
+        </div>
+        <div class="tele-item">
+          <span class="tele-label">GROUND SPEED</span>
+          <span class="tele-val" id="flightSpeed">0 kts</span>
+        </div>
+        <div class="tele-item">
+          <span class="tele-label">REMAIN DIST</span>
+          <span class="tele-val" id="flightDistance">-- km</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 오디오 컨트롤 -->
+    <div class="audio-control-bar">
+      <button class="btn-sound" id="btnSoundToggle" onclick="toggleEngineSound()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+        <span id="soundLabel">기내 엔진 백색소음 ON</span>
+      </button>
+    </div>
+
+    <!-- 목적지 선택 패널 -->
+    <div class="dest-selector-card">
+      <div class="dest-header">
+        <div class="dest-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--accent-cyan)"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
+          <span>시간대별 추천 목적지 선택</span>
+        </div>
+        <span class="dest-badge" id="destTierBadge">단거리 노선</span>
+      </div>
+      <div class="dest-list" id="destCardList"></div>
+    </div>
+
+    <!-- 보딩패스 컨트롤러 -->
+    <div class="boarding-card">
+      <div class="boarding-top">
+        <div class="pass-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M22 10V6c0-1.1-.9-2-2-2H4c-1.1 0-1.99.9-1.99 2v4c1.1 0 1.99.9 1.99 2s-.89 2-2 2v4c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2v-4c-1.1 0-2-.9-2-2s.9-2 2-2zm-2-1.5V6H4v2.54c1.19.69 2 1.99 2 3.46s-.81 2.77-2 3.46V18h16v-2.54c-1.19-.69-2-1.99-2-3.46s.81-2.77 2-3.46z"/></svg>
+          <span>STUDY BOARDING PASS</span>
+        </div>
+        <span class="class-badge">FIRST CLASS FOCUS</span>
+      </div>
+
+      <div class="boarding-body">
+        <div class="flight-route-row">
+          <div class="city-block">
+            <span class="city-code" id="fromAirportCode">ICN</span>
+            <span class="city-name" id="fromAirportCity">Seoul / South Korea</span>
+          </div>
+          <div class="flight-plane-divider">
+            <span class="route-dist-label" id="routeTotalDistText">-- km</span>
+            <div class="route-line"></div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="#0284c7"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          </div>
+          <div class="city-block right">
+            <span class="city-code" id="toAirportCode">HND</span>
+            <span class="city-name" id="toAirportCity">Tokyo / Japan</span>
+          </div>
+        </div>
+
+        <div class="input-row">
+          <div class="input-group">
+            <label class="input-label">PASSENGER MISSION (공부 과목 / 목표)</label>
+            <input type="text" id="subjectInput" class="input-field" value="알고리즘 코딩 테스트 문제 풀이" placeholder="예: 영단어 암기, 전공 시험 대비...">
+          </div>
+          <div class="input-group" style="max-width: 130px;">
+            <label class="input-label">직접 분 입력</label>
+            <input type="number" id="customMinutes" class="input-field" value="25" min="1" max="240" onchange="onCustomTimeChange(this.value)">
+          </div>
+        </div>
+
+        <!-- 목표 시간 프리셋 -->
+        <div class="time-selector">
+          <label class="input-label">FLIGHT DURATION (비행 목표 시간)</label>
+          <div class="time-btn-grid">
+            <button class="time-btn active" onclick="selectPresetTime(25)">
+              <span>25분</span>
+              <span class="tier-tag">단거리 셔틀</span>
+            </button>
+            <button class="time-btn" onclick="selectPresetTime(50)">
+              <span>50분</span>
+              <span class="tier-tag">중거리 집중</span>
+            </button>
+            <button class="time-btn" onclick="selectPresetTime(90)">
+              <span>90분</span>
+              <span class="tier-tag">장거리 몰입</span>
+            </button>
+            <button class="time-btn" onclick="selectPresetTime(120)">
+              <span>120분</span>
+              <span class="tier-tag">대륙간 횡단</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 타이머 디스플레이 -->
+        <div class="timer-display-box">
+          <div class="timer-clock" id="timerClock">25:00</div>
+          <div class="timer-status-row">
+            <span id="remainingTimeText">남은 시간 25:00</span>
+            <span id="progressPercent">비행 진행률 0%</span>
+          </div>
+        </div>
+
+        <!-- 프로그레스 바 -->
+        <div class="flight-progress-container">
+          <div class="progress-bar-track">
+            <div class="progress-bar-fill" id="progressFill"></div>
+          </div>
+          <div class="progress-labels">
+            <span id="progressFromLabel">이륙</span>
+            <span id="progressToLabel">착륙</span>
+          </div>
+        </div>
+
+        <!-- 실행 액션 버튼 -->
+        <div class="actions-grid">
+          <button class="btn-action btn-start" id="btnStartFlight" onclick="toggleTimer()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            <span>비행 시작 (이륙)</span>
+          </button>
+          <button class="btn-action btn-reset" onclick="resetTimer()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+            <span>초기화</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 비행 완료 (도착 및 릴레이 비행 안내) 모달 -->
+  <div class="modal-overlay" id="arrivalModal">
+    <div class="modal-card">
+      <div class="modal-icon">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+      </div>
+      <h2 class="modal-title">안전 착륙 완료! 🛬</h2>
+      <p class="modal-desc">
+        축하합니다! <span class="modal-highlight" id="modalSubject">공부</span>에 온전히 몰입하여<br>
+        목적지인 <span class="modal-highlight" id="modalDest">도쿄 (HND)</span>에 성공적으로 착륙했습니다.
+      </p>
+      <div class="relay-notice">
+        ✈️ <strong>연속 비행(세계 일주) 안내:</strong><br>
+        이제 <span id="modalNextDepart" style="color:var(--accent-cyan); font-weight:700;">HND</span> 공항이 새로운 출발지가 됩니다.<br>
+        이곳에서 새로운 다음 목적지를 선택해 계속 집중해 보세요!
+      </div>
+      <button class="btn-modal-close" onclick="closeModalAndSetNext()">다음 여정 준비하기</button>
+    </div>
+  </div>
+
+  <script>
+    /* ========================================================
+       1. 전 세계 주요 공항 데이터 (경위도 & 픽셀 좌표 매핑)
+       SVG ViewBox: 1000 x 500 (Equirectangular Projection)
+       x = (lon + 180) * (1000 / 360)
+       y = (90 - lat) * (500 / 180)
+       ======================================================== */
+    const ALL_AIRPORTS = {
+      // 대한민국
+      ICN: { code: 'ICN', city: '서울', country: '대한민국', lat: 37.46, lon: 126.44 },
+      CJU: { code: 'CJU', city: '제주', country: '대한민국', lat: 33.51, lon: 126.49 },
+      PUS: { code: 'PUS', city: '부산', country: '대한민국', lat: 35.17, lon: 128.93 },
+      
+      // 동아시아
+      HND: { code: 'HND', city: '도쿄', country: '일본', lat: 35.54, lon: 139.78 },
+      KIX: { code: 'KIX', city: '오사카', country: '일본', lat: 34.43, lon: 135.23 },
+      FUK: { code: 'FUK', city: '후쿠오카', country: '일본', lat: 33.58, lon: 130.45 },
+      TPE: { code: 'TPE', city: '타이베이', country: '대만', lat: 25.07, lon: 121.23 },
+      HKG: { code: 'HKG', city: '홍콩', country: '중국', lat: 22.30, lon: 113.91 },
+      PEK: { code: 'PEK', city: '베이징', country: '중국', lat: 40.07, lon: 116.60 },
+
+      // 동남아시아
+      BKK: { code: 'BKK', city: '방콕', country: '태국', lat: 13.69, lon: 100.75 },
+      SIN: { code: 'SIN', city: '싱가포르', country: '싱가포르', lat: 1.36, lon: 103.99 },
+      DAD: { code: 'DAD', city: '다낭', country: '베트남', lat: 16.05, lon: 108.19 },
+
+      // 유럽
+      LHR: { code: 'LHR', city: '런던', country: '영국', lat: 51.47, lon: -0.45 },
+      CDG: { code: 'CDG', city: '파리', country: '프랑스', lat: 49.00, lon: 2.55 },
+      FRA: { code: 'FRA', city: '프랑크푸르트', country: '독일', lat: 50.03, lon: 8.57 },
+      FCO: { code: 'FCO', city: '로마', country: '이탈리아', lat: 41.80, lon: 12.24 },
+
+      // 미주
+      HNL: { code: 'HNL', city: '호놀룰루', country: '미국 하와이', lat: 21.31, lon: -157.92 },
+      LAX: { code: 'LAX', city: '로스앤젤레스', country: '미국', lat: 33.94, lon: -118.40 },
+      SFO: { code: 'SFO', city: '샌프란시스코', country: '미국', lat: 37.62, lon: -122.37 },
+      JFK: { code: 'JFK', city: '뉴욕', country: '미국', lat: 40.64, lon: -73.77 },
+      YVR: { code: 'YVR', city: '밴쿠버', country: '캐나다', lat: 49.19, lon: -123.18 },
+
+      // 오세아니아 / 기타
+      SYD: { code: 'SYD', city: '시드니', country: '호주', lat: -33.94, lon: 151.17 },
+      DXB: { code: 'DXB', city: '두바이', country: 'UAE', lat: 25.25, lon: 55.36 },
+      IST: { code: 'IST', city: '이스탄불', country: '튀르키예', lat: 41.27, lon: 28.75 }
+    };
+
+    // 경위도 -> SVG(1000 x 500) 픽셀 좌표 변환
+    function geoToSvg(lat, lon) {
+      const x = (lon + 180) * (1000 / 360);
+      const y = (90 - lat) * (500 / 180);
+      return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
+    }
+
+    // 두 공항 간 대권 거리(km) 계산
+    function calcDistanceKm(a1, a2) {
+      const R = 6371;
+      const dLat = (a2.lat - a1.lat) * Math.PI / 180;
+      const dLon = (a2.lon - a1.lon) * Math.PI / 180;
+      const lat1 = a1.lat * Math.PI / 180;
+      const lat2 = a2.lat * Math.PI / 180;
+
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.sin(dLon/2) * Math.sin(dLon/2) * Math.cos(lat1) * Math.cos(lat2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return Math.round(R * c);
+    }
+
+    /* ========================================================
+       2. 상태 변수
+       ======================================================== */
+    let currentAirport = ALL_AIRPORTS.ICN; // 출발지 (도착 시 갱신됨)
+    let selectedDest = ALL_AIRPORTS.HND;   // 선택된 목적지
+    let targetMinutes = 25;
+    let totalSeconds = 25 * 60;
+    let remainingSeconds = totalSeconds;
+    let isRunning = false;
+    let timerInterval = null;
+    let isZoomed = false;
+
+    // Web Audio API
+    let audioCtx = null;
+    let noiseNode = null;
+    let gainNode = null;
+    let filterNode = null;
+    let isSoundOn = false;
+
+    /* ========================================================
+       3. Web Audio 기내 백색 소음 (브라운 노이즈)
+       ======================================================== */
+    function initAudioContext() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+    }
+
+    function startEngineSound() {
+      initAudioContext();
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      if (noiseNode) return;
+
+      const bufferSize = audioCtx.sampleRate * 2;
+      const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      let lastOut = 0.0;
+      for (let i = 0; i < bufferSize; i++) {
+        const white = Math.random() * 2 - 1;
+        output[i] = (lastOut + (0.02 * white)) / 1.02;
+        lastOut = output[i];
+        output[i] *= 3.5;
+      }
+
+      noiseNode = audioCtx.createBufferSource();
+      noiseNode.buffer = noiseBuffer;
+      noiseNode.loop = true;
+
+      filterNode = audioCtx.createBiquadFilter();
+      filterNode.type = 'lowpass';
+      filterNode.frequency.setValueAtTime(260, audioCtx.currentTime);
+      filterNode.Q.setValueAtTime(1.8, audioCtx.currentTime);
+
+      gainNode = audioCtx.createGain();
+      gainNode.gain.setValueAtTime(0.01, audioCtx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.28, audioCtx.currentTime + 2.5);
+
+      noiseNode.connect(filterNode);
+      filterNode.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      noiseNode.start();
+
+      isSoundOn = true;
+      document.getElementById('btnSoundToggle').classList.add('active');
+      document.getElementById('soundLabel').textContent = '기내 엔진 백색소음 ON';
+    }
+
+    function stopEngineSound() {
+      if (gainNode && audioCtx) {
+        gainNode.gain.setValueAtTime(gainNode.gain.value, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.2);
+        setTimeout(() => {
+          if (noiseNode) {
+            try { noiseNode.stop(); } catch(e){}
+            noiseNode.disconnect();
+            noiseNode = null;
+          }
+        }, 1300);
+      }
+      isSoundOn = false;
+      document.getElementById('btnSoundToggle').classList.remove('active');
+      document.getElementById('soundLabel').textContent = '기내 엔진 백색소음 OFF';
+    }
+
+    function toggleEngineSound() {
+      if (isSoundOn) {
+        stopEngineSound();
+      } else {
+        startEngineSound();
+      }
+    }
+
+    function playArrivalChime() {
+      initAudioContext();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+
+      const now = audioCtx.currentTime;
+      const osc1 = audioCtx.createOscillator();
+      const osc2 = audioCtx.createOscillator();
+      const g1 = audioCtx.createGain();
+      const g2 = audioCtx.createGain();
+
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(587.33, now); // D5
+      g1.gain.setValueAtTime(0, now);
+      g1.gain.linearRampToValueAtTime(0.25, now + 0.05);
+      g1.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+      osc1.connect(g1);
+      g1.connect(audioCtx.destination);
+      osc1.start(now);
+      osc1.stop(now + 1.3);
+
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(440, now + 0.45); // A4
+      g2.gain.setValueAtTime(0, now + 0.45);
+      g2.gain.linearRampToValueAtTime(0.3, now + 0.5);
+      g2.gain.exponentialRampToValueAtTime(0.001, now + 2.0);
+      osc2.connect(g2);
+      g2.connect(audioCtx.destination);
+      osc2.start(now + 0.45);
+      osc2.stop(now + 2.1);
+    }
+
+    /* ========================================================
+       4. 지도 렌더링 & 항로(Curve) 계산
+       ======================================================== */
+    // 베지어 곡선 제어점 계산 (아름다운 대권 곡선 효과)
+    function calcCurveControlPoint(p1, p2) {
+      const mx = (p1.x + p2.x) / 2;
+      const my = (p1.y + p2.y) / 2;
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      // 곡률을 북쪽(위쪽)으로 살짝 띄움
+      const curvature = Math.min(65, Math.max(25, dist * 0.18));
+      return { x: mx, y: Math.max(20, my - curvature) };
+    }
+
+    // 2차 베지어 곡선 위의 특정 t(0~1) 위치 및 기울기 계산
+    function getBezierPoint(p1, cp, p2, t) {
+      const inv = 1 - t;
+      const x = inv * inv * p1.x + 2 * inv * t * cp.x + t * t * p2.x;
+      const y = inv * inv * p1.y + 2 * inv * t * cp.y + t * t * p2.y;
+
+      // 접선 벡터(진행 각도)
+      const dx = 2 * (1 - t) * (cp.x - p1.x) + 2 * t * (p2.x - cp.x);
+      const dy = 2 * (1 - t) * (cp.y - p1.y) + 2 * t * (p2.y - cp.y);
+      const angleDeg = Math.atan2(dy, dx) * (180 / Math.PI);
+
+      return { x, y, angle: angleDeg };
+    }
+
+    // 지도 위 모든 공항 마커 노드 렌더링
+    function renderAirportNodes() {
+      const container = document.getElementById('airportsLayer');
+      container.innerHTML = '';
+
+      const pFrom = geoToSvg(currentAirport.lat, currentAirport.lon);
+      const pTo = geoToSvg(selectedDest.lat, selectedDest.lon);
+
+      Object.values(ALL_AIRPORTS).forEach(ap => {
+        const p = geoToSvg(ap.lat, ap.lon);
+        const isCur = ap.code === currentAirport.code;
+        const isDst = ap.code === selectedDest.code;
+
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('class', `airport-marker ${isCur ? 'current' : ''} ${isDst ? 'dest' : ''}`);
+        g.setAttribute('transform', `translate(${p.x}, ${p.y})`);
+        g.onclick = () => {
+          if (isRunning) return;
+          if (ap.code === currentAirport.code) return;
+          selectDestination(ap);
+        };
+
+        // 펄스 애니메이션 링
+        if (isCur || isDst) {
+          const pulse = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          pulse.setAttribute('class', 'pulse');
+          pulse.setAttribute('cx', 0);
+          pulse.setAttribute('cy', 0);
+          pulse.setAttribute('r', 4);
+          g.appendChild(pulse);
+        }
+
+        // 중심 점
+        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        dot.setAttribute('class', 'dot');
+        dot.setAttribute('cx', 0);
+        dot.setAttribute('cy', 0);
+        dot.setAttribute('r', isCur || isDst ? 4.2 : 2.4);
+        g.appendChild(dot);
+
+        // 라벨 텍스트
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('class', 'airport-label');
+        text.setAttribute('x', 6);
+        text.setAttribute('y', 3);
+        text.textContent = ap.code;
+        g.appendChild(text);
+
+        container.appendChild(g);
+      });
+    }
+
+    // 항로 점선 패스 및 비행기 위치 업데이트
+    function updateFlightRouteAndPlane(progressRatio) {
+      const p1 = geoToSvg(currentAirport.lat, currentAirport.lon);
+      const p2 = geoToSvg(selectedDest.lat, selectedDest.lon);
+      const cp = calcCurveControlPoint(p1, p2);
+
+      // 1. 전체 예정 경로 점선
+      const fullPathD = `M ${p1.x} ${p1.y} Q ${cp.x} ${cp.y} ${p2.x} ${p2.y}`;
+      document.getElementById('flightPathBg').setAttribute('d', fullPathD);
+
+      // 2. 비행기가 현재 지나온 실시간 경로(Active 점선)
+      const subSegments = 30;
+      const count = Math.max(1, Math.floor(progressRatio * subSegments));
+      let activeD = `M ${p1.x} ${p1.y}`;
+      for (let i = 1; i <= count; i++) {
+        const pt = getBezierPoint(p1, cp, p2, (i / subSegments) * progressRatio);
+        activeD += ` L ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`;
+      }
+      document.getElementById('flightPathActive').setAttribute('d', activeD);
+
+      // 3. 비행기 아이콘 위치 및 각도
+      const currentPt = getBezierPoint(p1, cp, p2, progressRatio);
+      const planeGroup = document.getElementById('planeGroup');
+      // SVG 비행기 기본 방향이 위쪽(0도 = -90도 회전 필요시 조정)
+      planeGroup.setAttribute('transform', `translate(${currentPt.x}, ${currentPt.y}) rotate(${currentPt.angle + 90})`);
+
+      // 4. 남은 거리(km) 갱신
+      const totalDist = calcDistanceKm(currentAirport, selectedDest);
+      const remainDist = Math.max(0, Math.round(totalDist * (1 - progressRatio)));
+      document.getElementById('flightDistance').textContent = `${remainDist.toLocaleString()} km`;
+
+      // 줌인 상태일 때 카메라 중심 이동
+      if (isZoomed) {
+        centerZoomTo(currentPt.x, currentPt.y);
+      }
+    }
+
+    /* ========================================================
+       5. 줌인 / 줌아웃 카메라 제어
+       ======================================================== */
+    function zoomToPlane() {
+      isZoomed = true;
+      document.getElementById('btnToggleZoom').classList.add('active');
+      document.getElementById('zoomLabelText').textContent = '전체 지도 보기';
+
+      const ratio = totalSeconds > 0 ? (1 - remainingSeconds / totalSeconds) : 0;
+      const p1 = geoToSvg(currentAirport.lat, currentAirport.lon);
+      const p2 = geoToSvg(selectedDest.lat, selectedDest.lon);
+      const cp = calcCurveControlPoint(p1, p2);
+      const cur = getBezierPoint(p1, cp, p2, ratio);
+
+      centerZoomTo(cur.x, cur.y);
+    }
+
+    function resetZoomToWorld() {
+      isZoomed = false;
+      document.getElementById('btnToggleZoom').classList.remove('active');
+      document.getElementById('zoomLabelText').textContent = '기체 시점 확대';
+      document.getElementById('worldMapSvg').setAttribute('viewBox', '0 0 1000 500');
+    }
+
+    function centerZoomTo(x, y) {
+      const zoomWidth = 340;
+      const zoomHeight = 170;
+      let vx = x - zoomWidth / 2;
+      let vy = y - zoomHeight / 2;
+
+      vx = Math.max(0, Math.min(1000 - zoomWidth, vx));
+      vy = Math.max(0, Math.min(500 - zoomHeight, vy));
+
+      document.getElementById('worldMapSvg').setAttribute('viewBox', `${vx} ${vy} ${zoomWidth} ${zoomHeight}`);
+    }
+
+    function toggleMapZoom() {
+      if (isZoomed) {
+        resetZoomToWorld();
+      } else {
+        zoomToPlane();
+      }
+    }
+
+    /* ========================================================
+       6. 시간 설정 및 목적지 자동 매칭
+       ======================================================== */
+    function getDistanceTier(mins) {
+      if (mins <= 35) return 'short';
+      if (mins <= 65) return 'medium';
+      return 'long';
+    }
+
+    // 현재 출발 공항을 기준으로 거리순 정렬된 추천 목적지 반환
+    function getDestinationsForCurrentLocation() {
+      return Object.values(ALL_AIRPORTS)
+        .filter(ap => ap.code !== currentAirport.code)
+        .map(ap => ({
+          ...ap,
+          dist: calcDistanceKm(currentAirport, ap)
+        }))
+        .sort((a, b) => a.dist - b.dist);
+    }
+
+    function renderDestinationCards() {
+      const list = document.getElementById('destCardList');
+      list.innerHTML = '';
+
+      const dests = getDestinationsForCurrentLocation();
+      const tier = getDistanceTier(targetMinutes);
+
+      document.getElementById('destTierBadge').textContent = 
+        tier === 'short' ? '단거리 셔틀 추천 (35분 이하)' :
+        tier === 'medium' ? '중거리 집중 추천 (36분~65분)' : '장거리 몰입 추천 (65분 이상)';
+
+      dests.forEach(ap => {
+        const isSel = ap.code === selectedDest.code;
+        const card = document.createElement('div');
+        card.className = `dest-card ${isSel ? 'selected' : ''}`;
+        card.onclick = () => {
+          if (isRunning) return;
+          selectDestination(ap);
+        };
+
+        card.innerHTML = `
+          <div class="dest-card-code">${ap.code}</div>
+          <div class="dest-card-city">${ap.city}</div>
+          <div class="dest-card-sub">${ap.country} • ${ap.dist.toLocaleString()} km</div>
+        `;
+        list.appendChild(card);
+      });
+    }
+
+    function selectDestination(dest) {
+      if (isRunning) return;
+      selectedDest = dest;
+
+      // 보딩패스 노선 업데이트
+      document.getElementById('toAirportCode').textContent = selectedDest.code;
+      document.getElementById('toAirportCity').textContent = `${selectedDest.city} / ${selectedDest.country}`;
+
+      const totalDist = calcDistanceKm(currentAirport, selectedDest);
+      document.getElementById('routeTotalDistText').textContent = `${totalDist.toLocaleString()} km`;
+
+      renderDestinationCards();
+      renderAirportNodes();
+      updateFlightRouteAndPlane(0);
+    }
+
+    function selectPresetTime(mins) {
+      if (isRunning) return;
+      targetMinutes = mins;
+      totalSeconds = mins * 60;
+      remainingSeconds = totalSeconds;
+
+      document.querySelectorAll('.time-btn').forEach(btn => btn.classList.remove('active'));
+      const found = Array.from(document.querySelectorAll('.time-btn')).find(b => b.textContent.includes(`${mins}분`));
+      if (found) found.classList.add('active');
+
+      document.getElementById('customMinutes').value = mins;
+
+      // 목적지 자동 매칭
+      const dests = getDestinationsForCurrentLocation();
+      const tier = getDistanceTier(mins);
+      let autoChoice = dests[0];
+      if (tier === 'short') autoChoice = dests[0];
+      else if (tier === 'medium') autoChoice = dests[Math.min(3, dests.length - 1)];
+      else if (tier === 'long') autoChoice = dests[Math.min(6, dests.length - 1)];
+      else autoChoice = dests[dests.length - 1];
+
+      selectDestination(autoChoice);
+      updateDisplays();
+    }
+
+    function onCustomTimeChange(val) {
+      if (isRunning) return;
+      const mins = Math.max(1, Math.min(240, parseInt(val) || 30));
+      targetMinutes = mins;
+      totalSeconds = mins * 60;
+      remainingSeconds = totalSeconds;
+
+      document.querySelectorAll('.time-btn').forEach(btn => btn.classList.remove('active'));
+      renderDestinationCards();
+      updateDisplays();
+    }
+
+    /* ========================================================
+       7. 타이머 제어 및 비행 상태 제어
+       ======================================================== */
+    function formatTime(sec) {
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    function updateDisplays() {
+      document.getElementById('timerClock').textContent = formatTime(remainingSeconds);
+      document.getElementById('remainingTimeText').textContent = `남은 시간 ${formatTime(remainingSeconds)}`;
+
+      const ratio = totalSeconds > 0 ? (1 - remainingSeconds / totalSeconds) : 0;
+      const pct = Math.min(100, Math.max(0, ratio * 100));
+
+      document.getElementById('progressFill').style.width = `${pct}%`;
+      document.getElementById('progressPercent').textContent = `비행 진행률 ${Math.round(pct)}%`;
+
+      // 지도 위 점선 경로와 비행기 위치 업데이트
+      updateFlightRouteAndPlane(ratio);
+    }
+
+    function toggleTimer() {
+      if (isRunning) {
+        pauseTimer();
+      } else {
+        startTimer();
+      }
+    }
+
+    function startTimer() {
+      if (isRunning) return;
+      initAudioContext();
+
+      if (!isSoundOn) {
+        startEngineSound();
+      }
+
+      isRunning = true;
+      document.getElementById('statusText').textContent = '순항 중';
+      document.getElementById('flightAltitude').textContent = 'FL 360';
+      document.getElementById('flightSpeed').textContent = '490 kts';
+
+      // 줌인: 비행기가 있는 곳으로 지도 확대
+      zoomToPlane();
+
+      const btn = document.getElementById('btnStartFlight');
+      btn.className = 'btn-action btn-pause';
+      btn.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+        <span>비행 일시정지</span>
+      `;
+
+      timerInterval = setInterval(() => {
+        if (remainingSeconds > 0) {
+          remainingSeconds--;
+          updateDisplays();
+        } else {
+          completeFlight();
+        }
+      }, 1000);
+    }
+
+    function pauseTimer() {
+      if (!isRunning) return;
+      clearInterval(timerInterval);
+      timerInterval = null;
+      isRunning = false;
+
+      document.getElementById('statusText').textContent = '일시 정지';
+      document.getElementById('flightAltitude').textContent = 'FL 360';
+      document.getElementById('flightSpeed').textContent = '0 kts';
+
+      const btn = document.getElementById('btnStartFlight');
+      btn.className = 'btn-action btn-start';
+      btn.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        <span>비행 재개 (계속)</span>
+      `;
+    }
+
+    function resetTimer() {
+      clearInterval(timerInterval);
+      timerInterval = null;
+      isRunning = false;
+      remainingSeconds = totalSeconds;
+
+      document.getElementById('statusText').textContent = '대기 중';
+      document.getElementById('flightAltitude').textContent = 'FL 000';
+      document.getElementById('flightSpeed').textContent = '0 kts';
+
+      const btn = document.getElementById('btnStartFlight');
+      btn.className = 'btn-action btn-start';
+      btn.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        <span>비행 시작 (이륙)</span>
+      `;
+
+      resetZoomToWorld();
+      updateDisplays();
+
+      if (isSoundOn) {
+        stopEngineSound();
+      }
+    }
+
+    function completeFlight() {
+      clearInterval(timerInterval);
+      timerInterval = null;
+      isRunning = false;
+
+      stopEngineSound();
+      playArrivalChime();
+
+      document.getElementById('statusText').textContent = '착륙 완료';
+      document.getElementById('flightAltitude').textContent = 'FL 000';
+      document.getElementById('flightSpeed').textContent = '0 kts';
+
+      const btn = document.getElementById('btnStartFlight');
+      btn.className = 'btn-action btn-start';
+      btn.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        <span>새 여정 준비</span>
+      `;
+
+      // 모달 표시
+      const subj = document.getElementById('subjectInput').value.trim() || '목표 공부';
+      document.getElementById('modalSubject').textContent = subj;
+      document.getElementById('modalDest').textContent = `${selectedDest.city} (${selectedDest.code})`;
+      document.getElementById('modalNextDepart').textContent = `${selectedDest.city} (${selectedDest.code})`;
+      document.getElementById('arrivalModal').classList.add('show');
+    }
+
+    // 도착 후 다음 여정 세팅 (도착했던 공항이 새로운 출발지가 됨!)
+    function closeModalAndSetNext() {
+      document.getElementById('arrivalModal').classList.remove('show');
+
+      // 1. 현재 공항을 이전 비행의 도착지로 변경
+      currentAirport = selectedDest;
+
+      // 상단 배너 표시 갱신
+      document.getElementById('currentAirportDisplay').textContent = 
+        `${currentAirport.code} • ${currentAirport.city}, ${currentAirport.country}`;
+
+      // 보딩패스 출발지 갱신
+      document.getElementById('fromAirportCode').textContent = currentAirport.code;
+      document.getElementById('fromAirportCity').textContent = `${currentAirport.city} / ${currentAirport.country}`;
+
+      // 2. 새로운 다음 목적지 추천 (거리 가까운 허브 중 자동 1순위)
+      const candidates = getDestinationsForCurrentLocation();
+      selectedDest = candidates[0];
+
+      // 3. 타이머 초기화 및 뷰 리셋
+      remainingSeconds = totalSeconds;
+      resetZoomToWorld();
+
+      selectDestination(selectedDest);
+      renderAirportNodes();
+      updateDisplays();
+    }
+
+    /* ========================================================
+       8. 초기 로드
+       ======================================================== */
+    window.addEventListener('DOMContentLoaded', () => {
+      // 초기 출발지 ICN 설정
+      document.getElementById('currentAirportDisplay').textContent = 
+        `${currentAirport.code} • ${currentAirport.city}, ${currentAirport.country}`;
+      document.getElementById('fromAirportCode').textContent = currentAirport.code;
+      document.getElementById('fromAirportCity').textContent = `${currentAirport.city} / ${currentAirport.country}`;
+
+      selectDestination(ALL_AIRPORTS.HND);
+      renderAirportNodes();
+      renderDestinationCards();
+      updateDisplays();
+    });
+  </script>
+</body>
+</html>
